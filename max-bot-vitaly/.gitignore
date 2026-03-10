@@ -1,0 +1,8 @@
+.env
+.autopost_paused
+venv/
+__pycache__/
+*.pyc
+*.db
+service_account.json
+*.log

@@ -1,0 +1,23 @@
+# Markdown и Cursor
+*.md
+.cursor/
+.cursorignore
+.cursorrules
+
+# Секреты и окружение
+.env
+**/service_account.json
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Проект бота
+.autopost_paused
+*.db
+*.log
