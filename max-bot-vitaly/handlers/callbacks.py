@@ -30,13 +30,16 @@ def _is_safe_payload(payload: str) -> bool:
 async def on_callback(event: MessageCallback) -> None:
     """Роутинг по payload: main, section:*, sub:*, item:*."""
     payload = (event.callback.payload or "").strip()
+    logger.debug("[callbacks] on_callback: payload=%r", payload)
     if not _is_safe_payload(payload):
+        logger.warning("[callbacks] on_callback: небезопасный или пустой payload, игнор")
         await event.answer(notification="Выберите пункт меню.")
         return
     settings = get_settings()
     channel_url = settings.channel_url or "https://max.ru"
 
     if payload == "main" or payload == "start_menu":
+        logger.info("[callbacks] payload=%s: главное меню", payload)
         text = get_menu_text("main_welcome")
         keyboard = main_menu_keyboard(channel_url)
         await event._ensure_bot().send_callback(
@@ -92,6 +95,7 @@ async def on_callback(event: MessageCallback) -> None:
 
     if payload.startswith("item:"):
         key = parse_item_payload(payload)
+        logger.info("[callbacks] payload=%s: пункт меню key=%s", payload, key)
         text = get_menu_text(key) if key else get_menu_text("direct_channel")
         # Для кофе по странам — кнопка «Ещё одну страну» ведёт обратно в sub:drinks:coffee
         same_payload = "sub:drinks:coffee" if "drinks:coffee:" in payload else None
@@ -102,4 +106,5 @@ async def on_callback(event: MessageCallback) -> None:
         )
         return
 
+    logger.debug("[callbacks] payload=%s: неизвестный payload, ответ «Выберите пункт меню»", payload)
     await event.answer(notification="Выберите пункт меню.")

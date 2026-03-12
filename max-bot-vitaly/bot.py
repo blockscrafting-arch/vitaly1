@@ -27,8 +27,18 @@ logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
+    logger.info("[bot] main: запуск, инициализация БД...")
     await init_db()
+    # Прогрев кэша таблицы в потоке, чтобы первый пост не блокировал event loop
+    try:
+        from sheets import refresh_cache
+        await asyncio.to_thread(refresh_cache)
+        logger.info("[bot] main: кэш таблицы прогрет")
+    except Exception as e:
+        logger.warning("[bot] main: прогрев кэша таблицы не удался — %s", e)
     settings = get_settings()
+    logger.info("[bot] main: конфиг загружен (channel_id=%s, group_chat_id=%s, sheet_id=%s)",
+                "ok" if settings.channel_id else "пусто", "ok" if settings.group_chat_id else "пусто", "ok" if settings.google_sheet_id else "пусто")
     bot = Bot(settings.max_bot_token.get_secret_value())
     dp = Dispatcher()
 
@@ -48,16 +58,17 @@ async def main() -> None:
 
     async def refresh_sheets_cache_loop() -> None:
         """Каждые 5 минут обновлять кэш Google Таблицы."""
+        logger.info("[bot] refresh_sheets_cache_loop: фоновая задача запущена, интервал 300 с")
         while True:
             await asyncio.sleep(300)
             try:
                 from sheets import refresh_cache
-                refresh_cache()
+                await asyncio.to_thread(refresh_cache)
             except Exception as e:
-                logger.debug("refresh_sheets_cache: %s", e)
+                logger.warning("[bot] refresh_sheets_cache_loop: ошибка обновления кэша — %s", e, exc_info=True)
 
     asyncio.create_task(refresh_sheets_cache_loop())
-    logger.info("Bot started")
+    logger.info("[bot] Bot started, polling...")
     await dp.start_polling(bot)
 
 

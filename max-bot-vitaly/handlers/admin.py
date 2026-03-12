@@ -35,7 +35,9 @@ def _is_admin(event: MessageCreated) -> bool:
 async def cmd_publish(event: MessageCreated) -> None:
     """Опубликовать анонс вручную (последний пост из канала — нужна реализация через API получения постов)."""
     if not _is_admin(event):
+        logger.debug("[admin] cmd_publish: вызов не от админа, игнор")
         return
+    logger.info("[admin] cmd_publish: запрос от админа")
     await event.message.answer("Ручная публикация: пока используйте публикацию поста в канале — бот отреагирует автоматически.")
 
 
@@ -43,6 +45,7 @@ async def cmd_stop(event: MessageCreated) -> None:
     """Приостановить автопостинг анонсов в группу."""
     if not _is_admin(event):
         return
+    logger.info("[admin] cmd_stop: приостановка автопостинга, создаём %s", PAUSE_FLAG_FILE)
     set_autopost_paused(True)
     await event.message.answer("Автопостинг приостановлен. Для возобновления: /resume")
 
@@ -51,6 +54,7 @@ async def cmd_resume(event: MessageCreated) -> None:
     """Возобновить автопостинг."""
     if not _is_admin(event):
         return
+    logger.info("[admin] cmd_resume: возобновление автопостинга, удаляем %s", PAUSE_FLAG_FILE)
     set_autopost_paused(False)
     await event.message.answer("Автопостинг возобновлён.")
 
@@ -59,6 +63,7 @@ async def cmd_status(event: MessageCreated) -> None:
     """Статус: режим, последняя публикация, кол-во за сегодня."""
     if not _is_admin(event):
         return
+    logger.info("[admin] cmd_status: запрос статуса от админа")
     import time
     from datetime import datetime
     paused = is_autopost_paused()
@@ -77,6 +82,7 @@ async def cmd_test(event: MessageCreated) -> None:
     """Отправить тестовый анонс в тестовую группу или админу в личку."""
     if not _is_admin(event):
         return
+    logger.info("[admin] cmd_test: запрос тестового анонса от админа")
     settings = get_settings()
     test_text = "Тестовый анонс. Проверка кнопок и формата."
     from keyboards.main_menu import announcement_keyboard
@@ -86,15 +92,23 @@ async def cmd_test(event: MessageCreated) -> None:
     if settings.test_group_chat_id:
         try:
             gid = int(settings.test_group_chat_id)
+            logger.info("[admin] cmd_test: отправка в тестовую группу chat_id=%s", gid)
             await bot.send_message(chat_id=gid, text=test_text, attachments=[keyboard.as_markup()])
             await event.message.answer("Тестовый анонс отправлен в тестовую группу.")
+            logger.info("[admin] cmd_test: успешно отправлено в тестовую группу")
         except Exception as e:
-            logger.exception("cmd_test: отправка в тестовую группу")
+            logger.exception("[admin] cmd_test: ошибка отправки в тестовую группу chat_id=%s — %s", settings.test_group_chat_id, e)
             await event.message.answer("Ошибка при выполнении. Проверьте логи.")
     else:
-        await bot.send_message(
-            user_id=settings.admin_user_id,
-            text=test_text,
-            attachments=[keyboard.as_markup()],
-        )
-        await event.message.answer("Тестовый анонс отправлен вам в личку.")
+        logger.info("[admin] cmd_test: TEST_GROUP_CHAT_ID не задан, отправка админу user_id=%s", settings.admin_user_id)
+        try:
+            await bot.send_message(
+                user_id=settings.admin_user_id,
+                text=test_text,
+                attachments=[keyboard.as_markup()],
+            )
+            await event.message.answer("Тестовый анонс отправлен вам в личку.")
+            logger.info("[admin] cmd_test: успешно отправлено админу в личку")
+        except Exception as e:
+            logger.exception("[admin] cmd_test: ошибка отправки админу — %s", e)
+            await event.message.answer("Ошибка при выполнении. Проверьте логи.")

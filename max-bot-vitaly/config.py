@@ -1,9 +1,12 @@
 """Конфигурация бота из переменных окружения."""
+import logging
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic.types import SecretStr
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -50,4 +53,8 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     """Возвращает загруженные настройки."""
-    return Settings()
+    try:
+        return Settings()
+    except Exception as e:
+        logger.exception("[config] get_settings: ошибка загрузки .env/валидации — %s", e)
+        raise
