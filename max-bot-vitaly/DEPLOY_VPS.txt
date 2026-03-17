@@ -1,63 +1,48 @@
 ================================================================================
-  ЧТО ДЕЛАТЬ НА VPS — Бот MAX для Виталия
+  ДЕПЛО НА VPS — Контент-машина napitki133.ru
 ================================================================================
 
-Требования: VPS с Ubuntu 22.04 (или 20.04), домен, указывающий на IP сервера
-(для webhook обязателен HTTPS на 443).
+Бот один: индексация сайта, выборка по кругу/вразнобой, ИИ-текст, публикация
+в 3 канала Telegram и 3 канала MAX по расписанию (МСК).
 
-Python: нужен 3.9 или новее (3.10, 3.11, 3.12 подходят). Проверка: python3 --version
-Если в репозитории нет python3.11 — используйте уже установленный python3 (venv создастся им).
-При запуске под root пути будут /root/vitaly1/... вместо /home/maxbot/...
+Python: 3.9+ (3.10, 3.11, 3.12). Проверка: python3 --version
 
 --------------------------------------------------------------------------------
-ВАРИАНТ A: Polling (быстрый старт, без nginx)
+1. SSH, клон, venv
 --------------------------------------------------------------------------------
-Подходит для теста. Бот сам ходит за обновлениями. На прод лучше Вариант B.
-
-1. Подключиться по SSH:
    ssh root@IP_СЕРВЕРА
-
-2. Обновить систему и поставить Python (если ещё нет подходящего):
-   apt update && apt install -y python3 python3-venv python3-pip git
-   (Если есть python3.11 в репозитории: python3.11 python3.11-venv. Иначе python3 достаточно.)
-
-3. Создать пользователя (рекомендуется, можно пропустить и работать под root):
-   adduser maxbot
-   usermod -aG sudo maxbot
-   su - maxbot
-
-4. Клонировать репозиторий (или залить файлы вручную):
    cd ~
    git clone https://github.com/blockscrafting-arch/vitaly1.git
    cd vitaly1/max-bot-vitaly
 
-5. Виртуальное окружение и зависимости:
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
 
-6. Конфиг и секреты:
+--------------------------------------------------------------------------------
+2. Конфиг
+--------------------------------------------------------------------------------
    cp .env.example .env
    nano .env
-   Заполнить: MAX_BOT_TOKEN, CHANNEL_ID, GROUP_CHAT_ID, OPENROUTER_API_KEY,
-   ADMIN_USER_ID, при необходимости GOOGLE_CREDENTIALS_PATH, GOOGLE_SHEET_ID,
-   TEST_GROUP_CHAT_ID.
 
-   Файл service_account.json положить в каталог max-bot-vitaly/ (если нужны
-   Google Таблицы).
+   Заполнить переменные с префиксом V2_:
+   V2_OPENROUTER_API_KEY, V2_TELEGRAM_BOT_TOKEN, V2_TELEGRAM_CHANNEL_*,
+   V2_MAX_BOT_TOKEN, V2_MAX_CHANNEL_*, V2_GOOGLE_SHEET_ID (если есть таблица).
+   service_account.json положить в max-bot-vitaly/ при использовании Google Таблицы.
 
-7. Проверка запуска:
+--------------------------------------------------------------------------------
+3. Проверка
+--------------------------------------------------------------------------------
    python bot.py
    (Ctrl+C для остановки)
 
-8. Systemd (автозапуск):
+--------------------------------------------------------------------------------
+4. Systemd
+--------------------------------------------------------------------------------
    sudo nano /etc/systemd/system/max-bot.service
 
-   Вставить (пример для root; для пользователя maxbot: User=maxbot,
-   пути /home/maxbot/vitaly1/max-bot-vitaly):
-
    [Unit]
-   Description=MAX Bot Vitaly
+   Description=Content bot napitki133
    After=network.target
 
    [Service]
@@ -72,81 +57,16 @@ Python: нужен 3.9 или новее (3.10, 3.11, 3.12 подходят). П
    [Install]
    WantedBy=multi-user.target
 
-   Затем:
    sudo systemctl daemon-reload
    sudo systemctl enable max-bot
    sudo systemctl start max-bot
-   sudo systemctl status max-bot
    sudo journalctl -u max-bot -f
 
 --------------------------------------------------------------------------------
-ВАРИАНТ B: Webhook (прод, HTTPS обязателен)
+ПОСЛЕ git pull
 --------------------------------------------------------------------------------
-MAX доставляет события на ваш HTTPS endpoint. Нужны: домен, nginx, SSL.
+   cd ~/vitaly1 && git pull origin main
+   cd max-bot-vitaly && source venv/bin/activate && pip install -r requirements.txt
+   sudo systemctl restart max-bot
 
-1–4. Как в Варианте A (Python, пользователь, клон, venv, pip install).
-
-5. Установить nginx и certbot:
-   sudo apt install -y nginx certbot python3-certbot-nginx
-
-6. Выпустить сертификат (подставьте свой домен):
-   sudo certbot --nginx -d your-bot-domain.com
-
-7. Настроить nginx для webhook:
-   sudo nano /etc/nginx/sites-available/max-bot
-
-   server {
-       listen 443 ssl;
-       server_name your-bot-domain.com;
-       ssl_certificate     /etc/letsencrypt/live/your-bot-domain.com/fullchain.pem;
-       ssl_certificate_key /etc/letsencrypt/live/your-bot-domain.com/privkey.pem;
-
-       location /webhook {
-           proxy_pass http://127.0.0.1:8080;
-           proxy_http_version 1.1;
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
-           proxy_set_header X-Max-Bot-Api-Secret $http_x_max_bot_api_secret;
-       }
-   }
-
-   sudo ln -s /etc/nginx/sites-available/max-bot /etc/nginx/sites-enabled/
-   sudo nginx -t && sudo systemctl reload nginx
-
-8. В .env добавить (если используете secret для webhook):
-   WEBHOOK_SECRET=ваш_секрет_5_256_символов
-   WEBHOOK_HOST=0.0.0.0
-   WEBHOOK_PORT=8080
-
-9. В коде бота переключить запуск на webhook:
-   В bot.py заменить:
-     await dp.start_polling(bot)
-   на запуск через handle_webhook (см. документацию maxapi и dev.max.ru:
-   POST /subscriptions с url=https://your-bot-domain.com/webhook).
-   В maxapi это обычно: await dp.handle_webhook(bot=bot, host='0.0.0.0', port=8080).
-
-10. Зарегистрировать webhook в MAX:
-    POST https://platform-api.max.ru/subscriptions
-    Authorization: {MAX_BOT_TOKEN}
-    Body: {"url": "https://your-bot-domain.com/webhook", "update_types": [...], "secret": "ваш_секрет"}
-
-11. Systemd — как в Варианте A, WorkingDirectory и ExecStart те же (bot.py уже
-    запускает webhook-сервер вместо polling).
-
---------------------------------------------------------------------------------
-ЧЕК-ЛИСТ ПЕРЕД ЗАПУСКОМ
---------------------------------------------------------------------------------
-[ ] .env заполнен (токен, ID канала и группы, OpenRouter, ADMIN_USER_ID)
-[ ] service_account.json на месте, если нужны Google Таблицы
-[ ] Для webhook: домен, nginx, SSL, подписка /subscriptions вызвана
-[ ] Логи: journalctl -u max-bot -f
-
---------------------------------------------------------------------------------
-ПОЛЕЗНЫЕ КОМАНДЫ
---------------------------------------------------------------------------------
-Перезапуск:    sudo systemctl restart max-bot
-Логи:          sudo journalctl -u max-bot -f
-Статус:        sudo systemctl status max-bot
-Обновление:    cd ~/vitaly1 && git pull && sudo systemctl restart max-bot
+================================================================================

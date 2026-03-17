@@ -1,4 +1,4 @@
-"""Конфигурация бота из переменных окружения."""
+"""Конфигурация бота (контент-машина napitki133.ru) из переменных окружения."""
 import logging
 from pathlib import Path
 
@@ -8,53 +8,70 @@ from pydantic.types import SecretStr
 
 logger = logging.getLogger(__name__)
 
+CHANNEL_TRAVEL = "travel"
+CHANNEL_LIFHAKI = "lifhaki"
+CHANNEL_DRINKS = "drinks"
+
 
 class Settings(BaseSettings):
-    """Настройки приложения из .env."""
+    """Настройки из .env. Префикс V2_ для переменных."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        env_prefix="V2_",
     )
 
-    # MAX Bot (SecretStr — не попадает в repr/логи)
-    max_bot_token: SecretStr = Field(..., description="Токен бота из @MasterBot")
-    channel_id: str = Field(default="", description="ID канала MAX")
-    group_chat_id: str = Field(default="", description="ID группы для анонсов")
-    channel_url: str = Field(
-        default="https://max.ru/id672301938557_biz",
-        description="Публичная ссылка на канал",
-    )
-    bot_link_url: str = Field(default="", description="Ссылка на бота (для кнопки в группе)")
-
-    # OpenRouter (SecretStr — не попадает в repr/логи)
+    wordpress_url: str = Field(default="https://napitki133.ru", description="Базовый URL сайта (WordPress)")
+    wordpress_api_path: str = Field(default="/wp-json/wp/v2", description="Путь к WordPress REST API")
+    woo_consumer_key: SecretStr = Field(default="", description="WooCommerce Consumer Key (ck_...)")
+    woo_consumer_secret: SecretStr = Field(default="", description="WooCommerce Consumer Secret (cs_...)")
+    woo_api_path: str = Field(default="/wp-json/wc/v3", description="Путь к WooCommerce API")
     openrouter_api_key: SecretStr = Field(default="", description="API ключ OpenRouter")
-    openrouter_model: str = Field(
-        default="openai/gpt-4o-mini",
-        description="Модель для генерации анонсов",
-    )
-
-    # Admin
-    admin_user_id: int = Field(default=0, description="user_id администратора в MAX")
-    test_group_chat_id: str = Field(default="", description="ID тестовой группы для /test")
-
-    # Google Sheets
-    google_credentials_path: str = Field(
-        default="service_account.json",
-        description="Путь к JSON ключу service account",
-    )
-    google_sheet_id: str = Field(default="", description="ID Google Таблицы")
+    openrouter_model: str = Field(default="google/gemini-2.0-flash-001", description="Модель для генерации текстов")
+    telegram_bot_token: SecretStr = Field(default="", description="Токен бота Telegram (@BotFather)")
+    telegram_channel_travel: str = Field(default="", description="ID или @username канала Путешествия")
+    telegram_channel_lifhaki: str = Field(default="", description="ID или @username канала Лайфхаки")
+    telegram_channel_drinks: str = Field(default="", description="ID или @username канала Напитки")
+    max_bot_token: SecretStr = Field(default="", description="Токен бота MAX (dev.max.ru)")
+    max_channel_travel: str = Field(default="", description="ID канала MAX Путешествия")
+    max_channel_lifhaki: str = Field(default="", description="ID канала MAX Лайфхаки")
+    max_channel_drinks: str = Field(default="", description="ID канала MAX Напитки")
+    site_url: str = Field(default="https://napitki133.ru", description="Ссылка на сайт")
+    radio_url: str = Field(default="https://napitki133.ru/internet-radio-sajta-napitki133-ru/", description="Ссылка на страницу плеера радио")
+    shop_url: str = Field(default="https://napitki133.ru/shop/", description="Ссылка на магазин")
+    repeat_interval_days: int = Field(default=14, description="Не повторять материал раньше N дней")
+    shop_repeat_days: int = Field(default=21, description="Не повторять товар раньше N дней")
+    google_credentials_path: str = Field(default="service_account.json", description="Путь к JSON ключу")
+    google_sheet_id: str = Field(default="", description="ID Google Таблицы (маппинг, расписание, промпты)")
 
     @property
-    def google_credentials_file(self) -> Path:
-        return Path(self.google_credentials_path)
+    def wp_api_url(self) -> str:
+        return self.wordpress_url.rstrip("/") + self.wordpress_api_path
+
+    @property
+    def woo_api_url(self) -> str:
+        return self.wordpress_url.rstrip("/") + self.woo_api_path
+
+    def get_telegram_channel_ids(self) -> dict[str, str]:
+        return {
+            CHANNEL_TRAVEL: self.telegram_channel_travel.strip(),
+            CHANNEL_LIFHAKI: self.telegram_channel_lifhaki.strip(),
+            CHANNEL_DRINKS: self.telegram_channel_drinks.strip(),
+        }
+
+    def get_max_channel_ids(self) -> dict[str, str]:
+        return {
+            CHANNEL_TRAVEL: self.max_channel_travel.strip(),
+            CHANNEL_LIFHAKI: self.max_channel_lifhaki.strip(),
+            CHANNEL_DRINKS: self.max_channel_drinks.strip(),
+        }
 
 
 def get_settings() -> Settings:
-    """Возвращает загруженные настройки."""
     try:
         return Settings()
     except Exception as e:
-        logger.exception("[config] get_settings: ошибка загрузки .env/валидации — %s", e)
+        logger.exception("[config] get_settings: ошибка загрузки .env — %s", e)
         raise
