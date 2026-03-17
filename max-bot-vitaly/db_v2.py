@@ -1,0 +1,221 @@
+"""SQLite для V2: каталог материалов, история публикаций, указатели ротации."""
+import logging
+import time
+from pathlib import Path
+
+import aiosqlite
+
+logger = logging.getLogger(__name__)
+
+DB_PATH_V2 = Path(__file__).resolve().parent / "bot_v2.db"
+
+# Типы контента для истории
+CONTENT_MAIN = "main"
+CONTENT_SHOP = "shop"
+CONTENT_RADIO = "radio"
+CONTENT_CROSS = "cross"
+CONTENT_SITE = "site"
+CONTENT_ROTATION = "rotation"
+
+
+async def init_db_v2() -> None:
+    """Создаёт таблицы V2 при первом запуске."""
+    logger.info("[db_v2] init_db_v2: путь=%s", DB_PATH_V2)
+    try:
+        async with aiosqlite.connect(DB_PATH_V2) as db:
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS catalog (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT UNIQUE NOT NULL,
+                    title TEXT NOT NULL,
+                    excerpt TEXT,
+                    category TEXT,
+                    subcategory TEXT,
+                    target_channel TEXT NOT NULL,
+                    content_type TEXT DEFAULT 'main',
+                    indexed_at INTEGER NOT NULL,
+                    created_at DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS publication_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    channel_platform TEXT NOT NULL,
+                    channel_name TEXT NOT NULL,
+                    published_at INTEGER NOT NULL,
+                    generated_text TEXT,
+                    content_type TEXT NOT NULL,
+                    created_at DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS rotation_state (
+                    key TEXT PRIMARY KEY,
+                    value_text TEXT,
+                    value_int INTEGER,
+                    updated_at INTEGER NOT NULL
+                )
+                """
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_catalog_target ON catalog(target_channel)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_catalog_content_type ON catalog(content_type)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_history_url ON publication_history(url)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_history_published ON publication_history(published_at)"
+            )
+            await db.commit()
+        logger.info("[db_v2] init_db_v2: таблицы созданы")
+    except Exception as e:
+        logger.exception("[db_v2] init_db_v2: ошибка — %s", e)
+        raise
+
+
+async def upsert_catalog_item(
+    url: str,
+    title: str,
+    excerpt: str,
+    category: str,
+    subcategory: str,
+    target_channel: str,
+    content_type: str = CONTENT_MAIN,
+) -> None:
+    """Добавляет или обновляет запись в каталоге."""
+    ts = int(time.time())
+    try:
+        async with aiosqlite.connect(DB_PATH_V2) as db:
+            await db.execute(
+                """
+                INSERT INTO catalog (url, title, excerpt, category, subcategory, target_channel, content_type, indexed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(url) DO UPDATE SET
+                    title=excluded.title,
+                    excerpt=excluded.excerpt,
+                    category=excluded.category,
+                    subcategory=excluded.subcategory,
+                    target_channel=excluded.target_channel,
+                    content_type=excluded.content_type,
+                    indexed_at=excluded.indexed_at
+                """,
+                (url, title, (excerpt or "")[:2000], category or "", subcategory or "", target_channel, content_type, ts),
+            )
+            await db.commit()
+    except Exception as e:
+        logger.exception("[db_v2] upsert_catalog_item: %s — %s", url[:80], e)
+        raise
+
+
+async def get_catalog_for_channel(
+    target_channel: str,
+    exclude_urls_seen_after_ts: int | None = None,
+    limit: int = 500,
+) -> list[tuple[int, str, str, str, str]]:
+    """
+    Возвращает список (id, url, title, excerpt, subcategory) для канала.
+    Если exclude_urls_seen_after_ts задан — исключает URL, опубликованные после этой метки.
+    """
+    try:
+        async with aiosqlite.connect(DB_PATH_V2) as db:
+            if exclude_urls_seen_after_ts is not None:
+                cursor = await db.execute(
+                    """
+                    SELECT c.id, c.url, c.title, c.excerpt, c.subcategory
+                    FROM catalog c
+                    WHERE c.target_channel = ?
+                    AND NOT EXISTS (
+                        SELECT 1 FROM publication_history h
+                        WHERE h.url = c.url AND h.published_at > ?
+                    )
+                    ORDER BY c.id
+                    LIMIT ?
+                    """,
+                    (target_channel, exclude_urls_seen_after_ts, limit),
+                )
+            else:
+                cursor = await db.execute(
+                    """
+                    SELECT id, url, title, excerpt, subcategory FROM catalog
+                    WHERE target_channel = ?
+                    ORDER BY id LIMIT ?
+                    """,
+                    (target_channel, limit),
+                )
+            rows = await cursor.fetchall()
+        return [tuple(r) for r in rows]
+    except Exception as e:
+        logger.exception("[db_v2] get_catalog_for_channel: %s", e)
+        raise
+
+
+async def add_publication_history(
+    url: str,
+    channel_platform: str,
+    channel_name: str,
+    generated_text: str | None = None,
+    content_type: str = CONTENT_MAIN,
+) -> None:
+    """Фиксирует публикацию в истории."""
+    ts = int(time.time())
+    try:
+        async with aiosqlite.connect(DB_PATH_V2) as db:
+            await db.execute(
+                """
+                INSERT INTO publication_history (url, channel_platform, channel_name, published_at, generated_text, content_type)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (url, channel_platform, channel_name, ts, (generated_text or "")[:5000], content_type),
+            )
+            await db.commit()
+        logger.debug("[db_v2] add_publication_history: url=%s platform=%s channel=%s", url[:50], channel_platform, channel_name)
+    except Exception as e:
+        logger.exception("[db_v2] add_publication_history: %s", e)
+        raise
+
+
+async def get_rotation_state(key: str) -> str | int | None:
+    """Читает значение rotation_state (value_text или value_int)."""
+    try:
+        async with aiosqlite.connect(DB_PATH_V2) as db:
+            cursor = await db.execute(
+                "SELECT value_text, value_int FROM rotation_state WHERE key = ?",
+                (key,),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        if row[0] is not None:
+            return row[0]
+        return row[1]
+    except Exception as e:
+        logger.exception("[db_v2] get_rotation_state: %s — %s", key, e)
+        return None
+
+
+async def set_rotation_state(key: str, value_text: str | None = None, value_int: int | None = None) -> None:
+    """Записывает значение в rotation_state."""
+    ts = int(time.time())
+    try:
+        async with aiosqlite.connect(DB_PATH_V2) as db:
+            await db.execute(
+                """
+                INSERT INTO rotation_state (key, value_text, value_int, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value_text=excluded.value_text, value_int=excluded.value_int, updated_at=excluded.updated_at
+                """,
+                (key, value_text, value_int, ts),
+            )
+            await db.commit()
+    except Exception as e:
+        logger.exception("[db_v2] set_rotation_state: %s — %s", key, e)
+        raise
