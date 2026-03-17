@@ -6,3 +6,4 @@ __pycache__/
 *.db
 service_account.json
 *.log
+*.txt

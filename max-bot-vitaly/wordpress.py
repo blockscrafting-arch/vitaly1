@@ -1,4 +1,5 @@
 """Индексация сайта napitki133.ru через WordPress REST API."""
+import asyncio
 import logging
 import re
 from typing import Any
@@ -29,6 +30,7 @@ async def fetch_categories() -> list[dict[str, Any]]:
             if len(data) < PER_PAGE:
                 break
             page += 1
+            await asyncio.sleep(0.2)
     logger.info("[wordpress] fetch_categories: загружено %s категорий", len(result))
     return result
 
@@ -55,6 +57,7 @@ async def fetch_posts_for_category(category_id: int) -> list[dict[str, Any]]:
             if len(data) < PER_PAGE:
                 break
             page += 1
+            await asyncio.sleep(0.2)
     logger.info("[wordpress] fetch_posts_for_category: category=%s, постов=%s", category_id, len(result))
     return result
 
@@ -99,6 +102,7 @@ async def index_site_to_catalog(
         name = cat.get("name", "")
         if cat.get("count", 0) == 0:
             continue
+        await asyncio.sleep(0.2)
         posts = await fetch_posts_for_category(cid)
         for post in posts:
             url = post.get("url", "").strip()

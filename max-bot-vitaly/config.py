@@ -1,6 +1,5 @@
 """Конфигурация бота (контент-машина napitki133.ru) из переменных окружения."""
 import logging
-from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict

@@ -50,4 +50,3 @@ jobs:
         run: pip install ruff
       - name: Ruff check
         run: ruff check . --ignore E501
-        continue-on-error: true
