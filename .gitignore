@@ -1,5 +1,7 @@
-# Markdown и Cursor
+# Markdown, документы и Cursor
 *.md
+*.docx
+*.pdf
 .cursor/
 .cursorignore
 .cursorrules
