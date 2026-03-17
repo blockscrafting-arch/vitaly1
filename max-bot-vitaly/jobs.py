@@ -26,7 +26,7 @@ async def run_main_content_for_channel(channel_name: str) -> None:
     if max_ok:
         await add_publication_history(url, "max", channel_name, text, CONTENT_MAIN)
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:300])
+    await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
     logger.info("[jobs] run_main_content: channel=%s url=%s tg=%s max=%s", channel_name, url[:50], tg_ok, max_ok)
 
 

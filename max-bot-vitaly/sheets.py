@@ -94,7 +94,7 @@ def append_history_row(url: str, platform: str, channel: str, text_preview: str)
     try:
         sh = gc.open_by_key(settings.google_sheet_id)
         ws = sh.worksheet("История")
-        row = [url[:200], platform, channel, text_preview[:500] if text_preview else ""]
+        row = [url[:200], platform, channel, (text_preview[:2000] if text_preview else "").strip()]
         ws.append_row(row, value_input_option="RAW")
         return True
     except Exception as e:
