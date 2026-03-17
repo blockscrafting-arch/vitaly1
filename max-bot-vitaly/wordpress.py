@@ -7,6 +7,9 @@ from typing import Any
 import httpx
 
 from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
+
+# Часть сайтов отдают 400 на page>1 при лимитах пагинации — не падаем, возвращаем что есть
+BAD_REQUEST_CODES = (400, 404)
 from db import upsert_catalog_item
 
 logger = logging.getLogger(__name__)
@@ -21,6 +24,8 @@ async def fetch_categories() -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         while True:
             r = await client.get(url, params={"per_page": PER_PAGE, "page": page})
+            if r.status_code in BAD_REQUEST_CODES and page > 1:
+                break
             r.raise_for_status()
             data = r.json()
             if not data:
@@ -43,6 +48,9 @@ async def fetch_posts_for_category(category_id: int) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         while True:
             r = await client.get(base, params={"categories": category_id, "per_page": PER_PAGE, "page": page})
+            if r.status_code in BAD_REQUEST_CODES and page > 1:
+                logger.debug("[wordpress] fetch_posts_for_category: category=%s page=%s %s, прекращаем пагинацию", category_id, page, r.status_code)
+                break
             r.raise_for_status()
             data = r.json()
             if not data:

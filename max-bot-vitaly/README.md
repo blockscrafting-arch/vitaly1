@@ -17,6 +17,7 @@ python bot.py
 
 ## Документация
 
+- **Настройка и тест (env, таблица, запуск):** [SETUP_AND_TEST.md](SETUP_AND_TEST.md)
 - **Деплой на VPS:** [DEPLOY_VPS.md](DEPLOY_VPS.md)
 - **После git pull:** [AFTER_GIT_PULL.md](AFTER_GIT_PULL.md)
 

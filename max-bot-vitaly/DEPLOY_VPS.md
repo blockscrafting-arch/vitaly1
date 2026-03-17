@@ -5,7 +5,7 @@
 Бот один: индексация сайта, выборка по кругу/вразнобой, ИИ-текст, публикация
 в 3 канала Telegram и 3 канала MAX по расписанию (МСК).
 
-Python: 3.9+ (3.10, 3.11, 3.12). Проверка: python3 --version
+Python: 3.10+ (3.11, 3.12). Проверка: python3 --version
 
 --------------------------------------------------------------------------------
 1. SSH, клон, venv
@@ -27,8 +27,9 @@ Python: 3.9+ (3.10, 3.11, 3.12). Проверка: python3 --version
 
    Заполнить переменные с префиксом V2_:
    V2_OPENROUTER_API_KEY, V2_TELEGRAM_BOT_TOKEN, V2_TELEGRAM_CHANNEL_*,
-   V2_MAX_BOT_TOKEN, V2_MAX_CHANNEL_*, V2_GOOGLE_SHEET_ID (если есть таблица).
-   service_account.json положить в max-bot-vitaly/ при использовании Google Таблицы.
+   V2_MAX_BOT_TOKEN, V2_MAX_CHANNEL_*, V2_GOOGLE_CREDENTIALS_PATH (по умолчанию service_account.json),
+   V2_GOOGLE_SHEET_ID (если есть таблица с листами Маппинг, История).
+   Файл service_account.json положить в max-bot-vitaly/ при использовании Google Таблицы.
 
 --------------------------------------------------------------------------------
 3. Проверка
