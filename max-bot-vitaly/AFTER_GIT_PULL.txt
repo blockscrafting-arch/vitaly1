@@ -1,0 +1,85 @@
+================================================================================
+  ЧТО ДЕЛАТЬ НА СЕРВЕРЕ ПОСЛЕ git pull
+================================================================================
+
+Каталог на сервере: .../vitaly1/max-bot-vitaly  (или ~/vitaly1/max-bot-vitaly)
+
+--------------------------------------------------------------------------------
+1. ЗАЙТИ В КАТАЛОГ И ПОДТЯНУТЬ КОД
+--------------------------------------------------------------------------------
+   cd ~/vitaly1
+   git pull origin main
+
+   cd max-bot-vitaly
+
+--------------------------------------------------------------------------------
+2. ОБНОВИТЬ ЗАВИСИМОСТИ (появились aiogram, apscheduler для V2)
+--------------------------------------------------------------------------------
+   source venv/bin/activate
+   pip install -r requirements.txt
+
+   (Если venv ещё не создан: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt)
+
+--------------------------------------------------------------------------------
+3. ТОЛЬКО БОТ V1 (канал + группа MAX, анонсы в группу)
+--------------------------------------------------------------------------------
+   Перезапустить сервис, чтобы подхватить обновлённый код:
+   sudo systemctl restart max-bot
+   sudo systemctl status max-bot
+
+   Логи: sudo journalctl -u max-bot -f
+
+--------------------------------------------------------------------------------
+4. ЕСЛИ ЗАПУСКАЕШЬ БОТ V2 (контент-машина: TG + MAX по расписанию)
+--------------------------------------------------------------------------------
+   а) В том же .env дописать переменные с префиксом V2_ (см. .env.example):
+      V2_WORDPRESS_URL=https://napitki133.ru
+      V2_OPENROUTER_API_KEY=...
+      V2_TELEGRAM_BOT_TOKEN=...
+      V2_TELEGRAM_CHANNEL_TRAVEL=...
+      V2_TELEGRAM_CHANNEL_LIFHAKI=...
+      V2_TELEGRAM_CHANNEL_DRINKS=...
+      V2_MAX_BOT_TOKEN=...
+      V2_MAX_CHANNEL_TRAVEL=...
+      V2_MAX_CHANNEL_LIFHAKI=...
+      V2_MAX_CHANNEL_DRINKS=...
+      V2_GOOGLE_SHEET_ID=...   (если есть таблица с листами Маппинг, История)
+
+   б) Создать отдельный сервис для V2:
+      sudo nano /etc/systemd/system/max-bot-v2.service
+
+      Вставить (пути заменить на свои):
+
+      [Unit]
+      Description=Content bot V2 napitki133
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/root/vitaly1/max-bot-vitaly
+      ExecStart=/root/vitaly1/max-bot-vitaly/venv/bin/python bot_v2.py
+      Restart=always
+      RestartSec=10
+      Environment=PATH=/root/vitaly1/max-bot-vitaly/venv/bin
+
+      [Install]
+      WantedBy=multi-user.target
+
+   в) Включить и запустить:
+      sudo systemctl daemon-reload
+      sudo systemctl enable max-bot-v2
+      sudo systemctl start max-bot-v2
+      sudo systemctl status max-bot-v2
+
+   Логи V2: sudo journalctl -u max-bot-v2 -f
+
+--------------------------------------------------------------------------------
+5. ИТОГО ПОСЛЕ git pull
+--------------------------------------------------------------------------------
+   • cd ~/vitaly1 && git pull origin main
+   • cd max-bot-vitaly && source venv/bin/activate && pip install -r requirements.txt
+   • sudo systemctl restart max-bot          # если крутишь v1
+   • (опционально) завести и запустить max-bot-v2, если нужен v2
+
+================================================================================
