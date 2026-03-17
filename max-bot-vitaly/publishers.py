@@ -1,10 +1,26 @@
 """Публикация постов в Telegram и MAX (по одному каналу за вызов)."""
 import asyncio
 import logging
+import re
 
 from config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# MAX API принимает chat_id только как integer; из URL вида https://max.ru/id672300068580_biz извлекаем число
+_MAX_CHANNEL_ID_RE = re.compile(r"id(\d+)", re.I)
+
+
+def _normalize_max_chat_id(value: str) -> int | None:
+    value = (value or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return int(value)
+    match = _MAX_CHANNEL_ID_RE.search(value)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def _make_post_text(body: str, url: str) -> str:
@@ -59,9 +75,10 @@ async def publish_max(channel_name: str, body: str, url: str = "") -> bool:
         logger.warning("[publishers] MAX_BOT_TOKEN не задан (V2_)")
         return False
     channels = settings.get_max_channel_ids()
-    chat_id = channels.get(channel_name, "").strip()
-    if not chat_id:
-        logger.warning("[publishers] Не задан ID канала MAX для %s", channel_name)
+    raw = channels.get(channel_name, "").strip()
+    chat_id = _normalize_max_chat_id(raw)
+    if chat_id is None:
+        logger.warning("[publishers] Не задан или неверный ID канала MAX для %s (ожидается число или URL вида .../id123_biz)", channel_name)
         return False
     text = _make_post_text(body, url)
     bot = Bot(token=token)
