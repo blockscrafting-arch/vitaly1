@@ -10,10 +10,16 @@ from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
 
 # Часть сайтов отдают 400 на page>1 при лимитах пагинации — не падаем, возвращаем что есть
 BAD_REQUEST_CODES = (400, 404)
-from db import upsert_catalog_item
+from db import CONTENT_ROTATION, upsert_catalog_item
 
 logger = logging.getLogger(__name__)
 PER_PAGE = 100
+
+# Подсказки для категорий аудио/видео (ротационный контент — один канал по кругу)
+ROTATION_CATEGORY_HINTS = (
+    "аудио", "audio", "подкаст", "podcast", "видео", "video", "reels", "рилз",
+)
+ROTATION_TARGET = "rotation"
 
 
 async def fetch_categories() -> list[dict[str, Any]]:
@@ -78,6 +84,17 @@ def default_category_to_channel() -> dict[str, str]:
     }
 
 
+def _is_rotation_category(slugs: list[str], names: list[str]) -> bool:
+    """Проверяет, относится ли материал к аудио/видео ротации."""
+    combined = (slugs or []) + (names or [])
+    for val in combined:
+        v = (val or "").lower()
+        for hint in ROTATION_CATEGORY_HINTS:
+            if hint in v:
+                return True
+    return False
+
+
 def resolve_channel_for_categories(
     category_slugs: list[str],
     category_names: list[str],
@@ -120,6 +137,19 @@ async def index_site_to_catalog(
             cat_ids = post.get("category_ids", [])
             slugs = [id_to_slug.get(i, "") for i in cat_ids]
             names = [id_to_name.get(i, "") for i in cat_ids]
+            if _is_rotation_category(slugs, names):
+                subcategory = slugs[0] if slugs else ""
+                await upsert_catalog_item(
+                    url=url,
+                    title=post.get("title", "")[:500],
+                    excerpt=post.get("excerpt", ""),
+                    category=name[:200],
+                    subcategory=subcategory[:200],
+                    target_channel=ROTATION_TARGET,
+                    content_type=CONTENT_ROTATION,
+                )
+                total += 1
+                continue
             channel = resolve_channel_for_categories(slugs, names, slug_to_channel=slug_to_channel)
             if not channel:
                 continue

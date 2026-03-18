@@ -164,6 +164,43 @@ async def add_publication_history(
         raise
 
 
+async def get_last_ad_timestamp(content_type: str, channel_name: str) -> int | None:
+    """Возвращает timestamp последней публикации данного типа рекламы в данном канале."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                """
+                SELECT MAX(published_at) FROM publication_history
+                WHERE content_type = ? AND channel_name = ?
+                """,
+                (content_type, channel_name),
+            )
+            row = await cursor.fetchone()
+        if row and row[0] is not None:
+            return row[0]
+        return None
+    except Exception as e:
+        logger.exception("[db] get_last_ad_timestamp: %s — %s", content_type, e)
+        return None
+
+
+async def get_last_publication_ts_for_url(url: str, content_type: str) -> int | None:
+    """Возвращает timestamp последней публикации данного URL с данным content_type (для антидубля товаров)."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                "SELECT MAX(published_at) FROM publication_history WHERE url = ? AND content_type = ?",
+                (url, content_type),
+            )
+            row = await cursor.fetchone()
+        if row and row[0] is not None:
+            return row[0]
+        return None
+    except Exception as e:
+        logger.exception("[db] get_last_publication_ts_for_url: %s", e)
+        return None
+
+
 async def get_rotation_state(key: str) -> str | int | None:
     try:
         async with aiosqlite.connect(DB_PATH) as db:

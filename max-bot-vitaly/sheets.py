@@ -1,11 +1,19 @@
-"""Google Таблица: маппинг категорий, лог публикаций."""
+"""Google Таблица: маппинг категорий, лог публикаций, расписание, промпты, настройки."""
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
 from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
 
 logger = logging.getLogger(__name__)
+CACHE_TTL_SEC = 600  # 10 минут
+_schedule_cache: list[dict[str, Any]] | None = None
+_schedule_cache_ts: float = 0
+_prompts_cache: dict[str, str] | None = None
+_prompts_cache_ts: float = 0
+_settings_cache: dict[str, str] | None = None
+_settings_cache_ts: float = 0
 
 SHEET_CHANNEL_TO_KEY = {
     "travel": CHANNEL_TRAVEL, "путешествия": CHANNEL_TRAVEL,
@@ -100,3 +108,107 @@ def append_history_row(url: str, platform: str, channel: str, text_preview: str)
     except Exception as e:
         logger.warning("[sheets] append_history_row: %s", e)
         return False
+
+
+def _get_sheet_worksheet(name: str) -> Any:
+    gc = _gc()
+    if not gc:
+        return None
+    settings = get_settings()
+    sheet_id = (settings.google_sheet_id or "").strip()
+    if not sheet_id:
+        return None
+    try:
+        return gc.open_by_key(sheet_id).worksheet(name)
+    except Exception as e:
+        logger.debug("[sheets] лист %s недоступен: %s", name, e)
+        return None
+
+
+def get_schedule_from_sheet() -> list[dict[str, Any]] | None:
+    """Читает лист «Расписание». Колонки: Канал, Тип, День, Время. Кэш 10 мин."""
+    global _schedule_cache, _schedule_cache_ts
+    if _schedule_cache is not None and (time.time() - _schedule_cache_ts) < CACHE_TTL_SEC:
+        return _schedule_cache
+    ws = _get_sheet_worksheet("Расписание")
+    if not ws:
+        return None
+    try:
+        rows = ws.get_all_records()
+        result: list[dict[str, Any]] = []
+        for r in rows:
+            ch = (r.get("Канал") or r.get("канал") or "").strip().lower()
+            slot_type = (r.get("Тип") or r.get("тип") or "main").strip().lower()
+            day = (r.get("День") or r.get("день") or "*").strip().lower()
+            t = (r.get("Время") or r.get("время") or "").strip()
+            if ch and t:
+                channel_key = SHEET_CHANNEL_TO_KEY.get(ch) or (ch if ch in (CHANNEL_TRAVEL, CHANNEL_LIFHAKI, CHANNEL_DRINKS) else ch)
+                result.append({"channel": channel_key, "slot_type": slot_type, "day": day, "time": t})
+        _schedule_cache = result if result else []
+        _schedule_cache_ts = time.time()
+        logger.info("[sheets] get_schedule_from_sheet: загружено слотов %s", len(_schedule_cache))
+        return _schedule_cache
+    except Exception as e:
+        logger.warning("[sheets] get_schedule_from_sheet: %s", e)
+        return None
+
+
+def get_prompts_from_sheet() -> dict[str, str] | None:
+    """Читает лист «Промпты». Колонки: Ключ (или Тип/Канал), Текст. Кэш 10 мин."""
+    global _prompts_cache, _prompts_cache_ts
+    if _prompts_cache is not None and (time.time() - _prompts_cache_ts) < CACHE_TTL_SEC:
+        return _prompts_cache
+    ws = _get_sheet_worksheet("Промпты")
+    if not ws:
+        return None
+    try:
+        rows = ws.get_all_records()
+        result: dict[str, str] = {}
+        for r in rows:
+            key = (r.get("Ключ") or r.get("ключ") or r.get("Тип") or r.get("тип") or "").strip().lower()
+            text = (r.get("Текст") or r.get("текст") or "").strip()
+            if key and text:
+                result[key] = text
+        _prompts_cache = result if result else {}
+        _prompts_cache_ts = time.time()
+        logger.info("[sheets] get_prompts_from_sheet: загружено промптов %s", len(_prompts_cache))
+        return _prompts_cache
+    except Exception as e:
+        logger.warning("[sheets] get_prompts_from_sheet: %s", e)
+        return None
+
+
+def get_settings_from_sheet() -> dict[str, str] | None:
+    """Читает лист «Настройки». Колонки: Ключ, Значение. Кэш 10 мин."""
+    global _settings_cache, _settings_cache_ts
+    if _settings_cache is not None and (time.time() - _settings_cache_ts) < CACHE_TTL_SEC:
+        return _settings_cache
+    ws = _get_sheet_worksheet("Настройки")
+    if not ws:
+        return None
+    try:
+        rows = ws.get_all_records()
+        result: dict[str, str] = {}
+        for r in rows:
+            k = (r.get("Ключ") or r.get("ключ") or "").strip()
+            v = (r.get("Значение") or r.get("значение") or "").strip()
+            if k:
+                result[k] = v
+        _settings_cache = result if result else {}
+        _settings_cache_ts = time.time()
+        logger.info("[sheets] get_settings_from_sheet: загружено настроек %s", len(_settings_cache))
+        return _settings_cache
+    except Exception as e:
+        logger.warning("[sheets] get_settings_from_sheet: %s", e)
+        return None
+
+
+def invalidate_sheets_cache() -> None:
+    """Сбрасывает кэш листов (после изменения расписания/промптов/настроек)."""
+    global _schedule_cache, _schedule_cache_ts, _prompts_cache, _prompts_cache_ts, _settings_cache, _settings_cache_ts
+    _schedule_cache = None
+    _schedule_cache_ts = 0
+    _prompts_cache = None
+    _prompts_cache_ts = 0
+    _settings_cache = None
+    _settings_cache_ts = 0
