@@ -3,11 +3,21 @@ import asyncio
 import logging
 import signal
 
+from config import get_settings
 from db import init_db
 from scheduler import build_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def _validate_config() -> None:
+    """Проверка критичных настроек при старте."""
+    settings = get_settings()
+    if not (settings.telegram_bot_token and settings.telegram_bot_token.get_secret_value()):
+        logger.error("[bot] V2_TELEGRAM_BOT_TOKEN не задан!")
+    if not (settings.openrouter_api_key and settings.openrouter_api_key.get_secret_value()):
+        logger.warning("[bot] V2_OPENROUTER_API_KEY не задан, ИИ-генерация не будет работать")
 
 _scheduler = None
 _main_task: asyncio.Task | None = None
@@ -33,6 +43,7 @@ async def main() -> None:
             pass
     logger.info("[bot] Запуск: инициализация БД...")
     await init_db()
+    _validate_config()
     _scheduler = build_scheduler()
     _scheduler.start()
     logger.info("[bot] Планировщик запущен. Ожидание слотов...")
@@ -42,7 +53,7 @@ async def main() -> None:
     except asyncio.CancelledError:
         pass
     finally:
-        if _scheduler.running:
+        if _scheduler and _scheduler.running:
             _scheduler.shutdown(wait=True)
         logger.info("[bot] Планировщик остановлен")
 

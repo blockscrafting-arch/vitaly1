@@ -6,4 +6,4 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 aiogram>=3.26.0
-apscheduler>=3.10.0
+apscheduler>=3.11.0

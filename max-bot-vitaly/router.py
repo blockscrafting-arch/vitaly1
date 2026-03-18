@@ -9,13 +9,34 @@ from db import get_catalog_for_channel, get_rotation_state, set_rotation_state
 logger = logging.getLogger(__name__)
 
 
+def _get_repeat_interval_days() -> int:
+    """Sheet > config > default."""
+    from sheets import get_setting_value
+    v = get_setting_value("repeat_interval_days", "")
+    if v:
+        try:
+            return int(v)
+        except ValueError:
+            pass
+    return get_settings().repeat_interval_days
+
+
 async def get_next_item_for_channel(
     channel: str,
     mode: str = "round",
     subcategory_gap: bool = True,
 ) -> tuple[int, str, str, str, str] | None:
-    settings = get_settings()
-    cutoff_ts = int(time.time()) - settings.repeat_interval_days * 86400
+    from sheets import get_setting_value
+    sheet_mode = get_setting_value("selection_mode", "").lower()
+    if sheet_mode in ("round", "random", "hybrid"):
+        mode = sheet_mode
+    sheet_sub = get_setting_value("subcategory_gap", "").lower()
+    if sheet_sub in ("false", "0", "no"):
+        subcategory_gap = False
+    elif sheet_sub in ("true", "1", "yes"):
+        subcategory_gap = True
+    repeat_days = _get_repeat_interval_days()
+    cutoff_ts = int(time.time()) - repeat_days * 86400
     rows = await get_catalog_for_channel(channel, exclude_urls_seen_after_ts=cutoff_ts, limit=2000)
     if not rows:
         logger.warning("[router] get_next_item_for_channel: пустой пул для канала %s", channel)

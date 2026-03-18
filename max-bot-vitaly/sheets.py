@@ -1,6 +1,7 @@
 """Google Таблица: маппинг категорий, лог публикаций, расписание, промпты, настройки."""
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -102,7 +103,13 @@ def append_history_row(url: str, platform: str, channel: str, text_preview: str)
     try:
         sh = gc.open_by_key(settings.google_sheet_id)
         ws = sh.worksheet("История")
-        row = [url[:200], platform, channel, (text_preview[:2000] if text_preview else "").strip()]
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            url[:200],
+            platform,
+            channel,
+            (text_preview[:2000] if text_preview else "").strip(),
+        ]
         ws.append_row(row, value_input_option="RAW")
         return True
     except Exception as e:
@@ -201,6 +208,14 @@ def get_settings_from_sheet() -> dict[str, str] | None:
     except Exception as e:
         logger.warning("[sheets] get_settings_from_sheet: %s", e)
         return None
+
+
+def get_setting_value(key: str, default: str = "") -> str:
+    """Читает значение настройки из листа «Настройки». Sheet > default."""
+    data = get_settings_from_sheet()
+    if data and key in data:
+        return (data[key] or "").strip()
+    return default
 
 
 def invalidate_sheets_cache() -> None:

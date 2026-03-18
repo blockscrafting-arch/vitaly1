@@ -34,23 +34,25 @@ async def run_main_content_for_channel(channel_name: str) -> None:
         logger.warning("[jobs] run_main_content: нет материала для канала %s, пропуск", channel_name)
         return
     _id, url, title, excerpt, subcategory = item
-    text = await generate_post(channel_name, "main", title, excerpt, url)
+    text = await generate_post(channel_name, "main", title, excerpt or "", url)
     if not text:
-        text = fallback_text(title, url)
+        text = fallback_text(title, url, excerpt or "")
     tg_ok, max_ok = await publish_to_both_platforms(channel_name, text, url)
     if tg_ok:
         await add_publication_history(url, "telegram", channel_name, text, CONTENT_MAIN)
     if max_ok:
         await add_publication_history(url, "max", channel_name, text, CONTENT_MAIN)
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
+    try:
+        await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
+    except Exception:
+        logger.warning("[jobs] append_history_row: не удалось записать в Google Таблицу")
     logger.info("[jobs] run_main_content: channel=%s url=%s tg=%s max=%s", channel_name, url[:50], tg_ok, max_ok)
 
 
 async def run_shop_content(channel_name: str) -> None:
     """Один пост с товаром/книгой из магазина в заданный канал (режим Б)."""
-    settings = get_settings()
-    cutoff_ts = int(time.time()) - settings.shop_repeat_days * 86400
+    cutoff_ts = int(time.time()) - _get_shop_repeat_days() * 86400
     items = await get_shop_products_for_channel(channel_name, exclude_urls_seen_after_ts=cutoff_ts, limit=200)
     if not items:
         logger.warning("[jobs] run_shop_content: нет товаров для канала %s (или все недавно публиковались), пропуск", channel_name)
@@ -58,14 +60,17 @@ async def run_shop_content(channel_name: str) -> None:
     _id, url, title, excerpt, _sub = random.choice(items)
     text = await generate_post(channel_name, "shop", title, excerpt or "", url)
     if not text:
-        text = fallback_text(title, url)
+        text = fallback_text(title, url, excerpt or "")
     tg_ok, max_ok = await publish_to_both_platforms(channel_name, text, url)
     if tg_ok:
         await add_publication_history(url, "telegram", channel_name, text, CONTENT_SHOP)
     if max_ok:
         await add_publication_history(url, "max", channel_name, text, CONTENT_SHOP)
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
+    try:
+        await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
+    except Exception:
+        logger.warning("[jobs] append_history_row: не удалось записать в Google Таблицу")
     logger.info("[jobs] run_shop_content: channel=%s url=%s tg=%s max=%s", channel_name, url[:50], tg_ok, max_ok)
 
 # Для перекрёстной рекламы: в каком канале кого рекламируем (следующий по ротации)
@@ -79,17 +84,53 @@ CROSS_PROMO_NAMES = {
     CHANNEL_LIFHAKI: "Лайфхаки",
     CHANNEL_DRINKS: "Напитки",
 }
-AD_MIN_INTERVAL_DAYS = 6
+
+
+def _get_ad_interval_days() -> int:
+    """Минимальный интервал между рекламными постами (дней). Sheet > default 6."""
+    from sheets import get_setting_value
+    v = get_setting_value("ad_min_interval_days", "")
+    if v:
+        try:
+            return int(v)
+        except ValueError:
+            pass
+    return 6
+
+
+def _get_shop_repeat_days() -> int:
+    """Sheet > config > default."""
+    from sheets import get_setting_value
+    v = get_setting_value("shop_repeat_days", "")
+    if v:
+        try:
+            return int(v)
+        except ValueError:
+            pass
+    return get_settings().shop_repeat_days
+
+
+def _get_repeat_interval_days() -> int:
+    """Sheet > config > default."""
+    from sheets import get_setting_value
+    v = get_setting_value("repeat_interval_days", "")
+    if v:
+        try:
+            return int(v)
+        except ValueError:
+            pass
+    return get_settings().repeat_interval_days
 
 
 async def run_cross_promo(channel_name: str) -> None:
     """Перекрёстная реклама: нативный анонс другого канала (режим В)."""
+    ad_days = _get_ad_interval_days()
     last_ts = await get_last_ad_timestamp(CONTENT_CROSS, channel_name)
-    if last_ts and (time.time() - last_ts) < AD_MIN_INTERVAL_DAYS * 86400:
+    if last_ts and (time.time() - last_ts) < ad_days * 86400:
         logger.info(
             "[jobs] run_cross_promo: пропуск, реклама в %s была менее %s дней назад",
             channel_name,
-            AD_MIN_INTERVAL_DAYS,
+            ad_days,
         )
         return
     targets = CROSS_PROMO_TARGETS.get(channel_name, [CHANNEL_LIFHAKI])
@@ -112,15 +153,19 @@ async def run_cross_promo(channel_name: str) -> None:
     if max_ok:
         await add_publication_history(fake_url, "max", channel_name, text, CONTENT_CROSS)
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, fake_url, platforms, channel_name, text[:2000])
+    try:
+        await asyncio.to_thread(append_history_row, fake_url, platforms, channel_name, text[:2000])
+    except Exception:
+        logger.warning("[jobs] append_history_row: не удалось записать в Google Таблицу")
     logger.info("[jobs] run_cross_promo: channel=%s promo=%s tg=%s max=%s", channel_name, promo_channel, tg_ok, max_ok)
 
 
 async def run_site_promo(channel_name: str) -> None:
     """Мягкая реклама сайта napitki133.ru (режим Г)."""
+    ad_days = _get_ad_interval_days()
     last_ts = await get_last_ad_timestamp(CONTENT_SITE, channel_name)
-    if last_ts and (time.time() - last_ts) < AD_MIN_INTERVAL_DAYS * 86400:
-        logger.info("[jobs] run_site_promo: пропуск, реклама сайта в %s была менее %s дней назад", channel_name, AD_MIN_INTERVAL_DAYS)
+    if last_ts and (time.time() - last_ts) < ad_days * 86400:
+        logger.info("[jobs] run_site_promo: пропуск, реклама сайта в %s была менее %s дней назад", channel_name, ad_days)
         return
     settings = get_settings()
     site_url = settings.site_url or "https://napitki133.ru"
@@ -135,15 +180,19 @@ async def run_site_promo(channel_name: str) -> None:
     if max_ok:
         await add_publication_history(site_url, "max", channel_name, text, CONTENT_SITE)
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, site_url, platforms, channel_name, text[:2000])
+    try:
+        await asyncio.to_thread(append_history_row, site_url, platforms, channel_name, text[:2000])
+    except Exception:
+        logger.warning("[jobs] append_history_row: не удалось записать в Google Таблицу")
     logger.info("[jobs] run_site_promo: channel=%s tg=%s max=%s", channel_name, tg_ok, max_ok)
 
 
 async def run_radio_promo(channel_name: str) -> None:
     """Реклама страницы плеера радио (режим Д)."""
+    ad_days = _get_ad_interval_days()
     last_ts = await get_last_ad_timestamp(CONTENT_RADIO, channel_name)
-    if last_ts and (time.time() - last_ts) < AD_MIN_INTERVAL_DAYS * 86400:
-        logger.info("[jobs] run_radio_promo: пропуск, реклама радио в %s была менее %s дней назад", channel_name, AD_MIN_INTERVAL_DAYS)
+    if last_ts and (time.time() - last_ts) < ad_days * 86400:
+        logger.info("[jobs] run_radio_promo: пропуск, реклама радио в %s была менее %s дней назад", channel_name, ad_days)
         return
     settings = get_settings()
     radio_url = settings.radio_url or "https://napitki133.ru/internet-radio-sajta-napitki133-ru/"
@@ -156,7 +205,10 @@ async def run_radio_promo(channel_name: str) -> None:
     if max_ok:
         await add_publication_history(radio_url, "max", channel_name, text, CONTENT_RADIO)
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, radio_url, platforms, channel_name, text[:2000])
+    try:
+        await asyncio.to_thread(append_history_row, radio_url, platforms, channel_name, text[:2000])
+    except Exception:
+        logger.warning("[jobs] append_history_row: не удалось записать в Google Таблицу")
     logger.info("[jobs] run_radio_promo: channel=%s tg=%s max=%s", channel_name, tg_ok, max_ok)
 
 
@@ -166,8 +218,7 @@ AV_ROTATION_KEY = "av_rotation_channel"
 
 async def run_av_rotation() -> None:
     """Ротация аудио/видео: 1 раз в неделю один материал в один канал по кругу (режим Е)."""
-    settings = get_settings()
-    cutoff_ts = int(time.time()) - settings.repeat_interval_days * 86400
+    cutoff_ts = int(time.time()) - _get_repeat_interval_days() * 86400
     idx = await get_rotation_state(AV_ROTATION_KEY)
     idx = int(idx) if idx is not None else 0
     idx = idx % len(AV_ROTATION_CHANNELS)
@@ -179,7 +230,7 @@ async def run_av_rotation() -> None:
     _id, url, title, excerpt, _sub = random.choice(rows)
     text = await generate_post(channel_name, "main", title, excerpt or "", url)
     if not text:
-        text = fallback_text(title, url)
+        text = fallback_text(title, url, excerpt or "")
     tg_ok, max_ok = await publish_to_both_platforms(channel_name, text, url)
     if tg_ok:
         await add_publication_history(url, "telegram", channel_name, text, CONTENT_ROTATION)
@@ -187,7 +238,10 @@ async def run_av_rotation() -> None:
         await add_publication_history(url, "max", channel_name, text, CONTENT_ROTATION)
     await set_rotation_state(AV_ROTATION_KEY, value_int=(idx + 1) % len(AV_ROTATION_CHANNELS))
     platforms = ",".join(p for p, ok in [("telegram", tg_ok), ("max", max_ok)] if ok) or "—"
-    await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
+    try:
+        await asyncio.to_thread(append_history_row, url, platforms, channel_name, text[:2000])
+    except Exception:
+        logger.warning("[jobs] append_history_row: не удалось записать в Google Таблицу")
     logger.info("[jobs] run_av_rotation: channel=%s url=%s tg=%s max=%s", channel_name, url[:50], tg_ok, max_ok)
 
 

@@ -32,6 +32,37 @@ def _make_post_text(body: str, url: str) -> str:
     return f"{body}\n\n{url}"
 
 
+async def _retry_send(coro_factory, max_retries: int = 3, initial_delay: float = 2.0) -> bool:
+    """Retry send with exponential backoff. coro_factory() returns a fresh awaitable each call."""
+    delay = initial_delay
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            await coro_factory()
+            return True
+        except Exception as e:
+            last_exc = e
+            retry_after = getattr(e, "retry_after", None)
+            if retry_after is not None:
+                wait = min(retry_after, 60)
+                logger.warning("[publishers] Rate limit (RetryAfter), ждём %s сек", wait)
+                await asyncio.sleep(wait)
+                continue
+            if "429" in str(e) or "retry" in str(e).lower() or "flood" in str(e).lower():
+                logger.warning("[publishers] Rate limit, ждём %s сек", delay)
+                await asyncio.sleep(delay)
+                delay *= 2
+                continue
+            if attempt < max_retries - 1:
+                logger.warning("[publishers] Попытка %s/%s: %s, повтор через %s сек", attempt + 1, max_retries, e, delay)
+                await asyncio.sleep(delay)
+                delay *= 2
+            else:
+                logger.exception("[publishers] Все попытки исчерпаны: %s", e)
+                return False
+    return False
+
+
 async def publish_telegram(channel_name: str, body: str, url: str = "") -> bool:
     try:
         from aiogram import Bot
@@ -53,12 +84,10 @@ async def publish_telegram(channel_name: str, body: str, url: str = "") -> bool:
         text = text[:4090] + "\n\n…"
     bot = Bot(token=token)
     try:
-        await bot.send_message(chat_id=chat_id, text=text)
-        logger.info("[publishers] Telegram: пост отправлен в канал %s", channel_name)
-        return True
-    except Exception as e:
-        logger.exception("[publishers] Telegram: ошибка в %s — %s", channel_name, e)
-        return False
+        ok = await _retry_send(lambda: bot.send_message(chat_id=chat_id, text=text))
+        if ok:
+            logger.info("[publishers] Telegram: пост отправлен в канал %s", channel_name)
+        return ok
     finally:
         await bot.session.close()
 
@@ -83,12 +112,10 @@ async def publish_max(channel_name: str, body: str, url: str = "") -> bool:
     text = _make_post_text(body, url)
     bot = Bot(token=token)
     try:
-        await bot.send_message(chat_id=chat_id, text=text)
-        logger.info("[publishers] MAX: пост отправлен в канал %s", channel_name)
-        return True
-    except Exception as e:
-        logger.exception("[publishers] MAX: ошибка в %s — %s", channel_name, e)
-        return False
+        ok = await _retry_send(lambda: bot.send_message(chat_id=chat_id, text=text))
+        if ok:
+            logger.info("[publishers] MAX: пост отправлен в канал %s", channel_name)
+        return ok
     finally:
         try:
             await bot.close_session()

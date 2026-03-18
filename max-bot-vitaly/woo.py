@@ -167,8 +167,6 @@ async def get_shop_products_for_channel(
     Возвращает список товаров из каталога для канала (id, url, title, excerpt, subcategory).
     exclude_urls_seen_after_ts — не возвращать товары, опубликованные после этого timestamp.
     """
-    import aiosqlite
-
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             if exclude_urls_seen_after_ts is not None:

@@ -1,5 +1,6 @@
 """Генерация короткого поста через OpenRouter (по каналу и типу контента)."""
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -65,7 +66,7 @@ async def generate_post(
         logger.error("[ai] OPENROUTER_API_KEY не задан")
         return None
     system = _get_system_prompt(channel, content_type)
-    user_content = f"Заголовок: {title}\n\nФрагмент: {excerpt[:2000]}{extra_context}"
+    user_content = f"Заголовок: {title}\n\nФрагмент: {(excerpt or '')[:2000]}{extra_context}"
     if url:
         user_content += f"\n\nСсылка на материал (в пост не вставлять): {url}"
     payload: dict[str, Any] = {
@@ -97,5 +98,14 @@ async def generate_post(
     return None
 
 
-def fallback_text(title: str, url: str) -> str:
-    return f"{title}\n\n{url}"
+def fallback_text(title: str, url: str, excerpt: str = "") -> str:
+    """Fallback при недоступности OpenRouter: заголовок + первые 2 предложения + ссылка."""
+    parts = [title]
+    if excerpt:
+        sentences = re.split(r"(?<=[.!?])\s+", excerpt.strip())
+        preview = " ".join(sentences[:2])
+        if preview:
+            parts.append(preview)
+    if url:
+        parts.append(url)
+    return "\n\n".join(parts)
