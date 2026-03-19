@@ -127,7 +127,7 @@ async def index_shop_to_catalog() -> int:
         if not isinstance(cat_id, int):
             continue
         page = 1
-        while True:
+        while page <= 10:
             products = await fetch_products(category_id=cat_id, per_page=PER_PAGE, page=page)
             if not products:
                 break
@@ -162,6 +162,7 @@ async def get_shop_products_for_channel(
     channel: str,
     exclude_urls_seen_after_ts: int | None = None,
     limit: int = 100,
+    order_by_random: bool = False,
 ) -> list[tuple[int, str, str, str, str]]:
     """
     Возвращает список товаров из каталога для канала (id, url, title, excerpt, subcategory).
@@ -169,30 +170,22 @@ async def get_shop_products_for_channel(
     """
     try:
         async with aiosqlite.connect(DB_PATH) as db:
+            query = "SELECT c.id, c.url, c.title, c.excerpt, c.subcategory FROM catalog c WHERE c.target_channel = ? AND c.content_type = ?"
+            params: list[Any] = [channel, CONTENT_SHOP]
+
             if exclude_urls_seen_after_ts is not None:
-                cursor = await db.execute(
-                    """
-                    SELECT c.id, c.url, c.title, c.excerpt, c.subcategory
-                    FROM catalog c
-                    WHERE c.target_channel = ? AND c.content_type = ?
-                    AND NOT EXISTS (
-                        SELECT 1 FROM publication_history h
-                        WHERE h.url = c.url AND h.content_type = ? AND h.published_at > ?
-                    )
-                    ORDER BY c.id
-                    LIMIT ?
-                    """,
-                    (channel, CONTENT_SHOP, CONTENT_SHOP, exclude_urls_seen_after_ts, limit),
-                )
+                query += " AND NOT EXISTS (SELECT 1 FROM publication_history h WHERE h.url = c.url AND h.content_type = ? AND h.published_at > ?)"
+                params.extend([CONTENT_SHOP, exclude_urls_seen_after_ts])
+
+            if order_by_random:
+                query += " ORDER BY RANDOM()"
             else:
-                cursor = await db.execute(
-                    """
-                    SELECT id, url, title, excerpt, subcategory FROM catalog
-                    WHERE target_channel = ? AND content_type = ?
-                    ORDER BY id LIMIT ?
-                    """,
-                    (channel, CONTENT_SHOP, limit),
-                )
+                query += " ORDER BY c.id"
+
+            query += " LIMIT ?"
+            params.append(limit)
+
+            cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
         return [tuple(r) for r in rows]
     except Exception as e:

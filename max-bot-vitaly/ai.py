@@ -110,7 +110,7 @@ async def generate_post(
         "max_tokens": 400,
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://napitki133.ru"}
-    timeout = httpx.Timeout(60.0, connect=15.0)
+    timeout = httpx.Timeout(20.0, connect=10.0)
     for attempt in range(3):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:

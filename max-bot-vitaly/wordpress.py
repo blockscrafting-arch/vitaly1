@@ -46,13 +46,13 @@ async def fetch_categories() -> list[dict[str, Any]]:
     return result
 
 
-async def fetch_posts_for_category(category_id: int) -> list[dict[str, Any]]:
+async def fetch_posts_for_category(category_id: int, max_pages: int = 10) -> list[dict[str, Any]]:
     settings = get_settings()
     base = f"{settings.wp_api_url}/posts"
     result: list[dict[str, Any]] = []
     page = 1
     async with httpx.AsyncClient(timeout=30.0) as client:
-        while True:
+        while page <= max_pages:
             r = await client.get(base, params={"categories": category_id, "per_page": PER_PAGE, "page": page})
             if r.status_code in BAD_REQUEST_CODES and page > 1:
                 logger.debug("[wordpress] fetch_posts_for_category: category=%s page=%s %s, прекращаем пагинацию", category_id, page, r.status_code)

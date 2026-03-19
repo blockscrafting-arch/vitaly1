@@ -1,6 +1,7 @@
 """SQLite: каталог материалов, история публикаций, указатели ротации."""
 import logging
 import time
+from typing import Any
 from pathlib import Path
 
 import aiosqlite
@@ -110,29 +111,32 @@ async def get_catalog_for_channel(
     target_channel: str,
     exclude_urls_seen_after_ts: int | None = None,
     limit: int = 500,
+    exclude_subcategory: str | None = None,
+    order_by_random: bool = False,
+    offset: int = 0,
 ) -> list[tuple[int, str, str, str, str]]:
     try:
         async with aiosqlite.connect(DB_PATH) as db:
+            query = "SELECT c.id, c.url, c.title, c.excerpt, c.subcategory FROM catalog c WHERE c.target_channel = ?"
+            params: list[Any] = [target_channel]
+            
             if exclude_urls_seen_after_ts is not None:
-                cursor = await db.execute(
-                    """
-                    SELECT c.id, c.url, c.title, c.excerpt, c.subcategory
-                    FROM catalog c
-                    WHERE c.target_channel = ?
-                    AND NOT EXISTS (
-                        SELECT 1 FROM publication_history h
-                        WHERE h.url = c.url AND h.published_at > ?
-                    )
-                    ORDER BY c.id
-                    LIMIT ?
-                    """,
-                    (target_channel, exclude_urls_seen_after_ts, limit),
-                )
+                query += " AND NOT EXISTS (SELECT 1 FROM publication_history h WHERE h.url = c.url AND h.published_at > ?)"
+                params.append(exclude_urls_seen_after_ts)
+                
+            if exclude_subcategory:
+                query += " AND (c.subcategory IS NULL OR c.subcategory != ?)"
+                params.append(exclude_subcategory)
+                
+            if order_by_random:
+                query += " ORDER BY RANDOM()"
             else:
-                cursor = await db.execute(
-                    "SELECT id, url, title, excerpt, subcategory FROM catalog WHERE target_channel = ? ORDER BY id LIMIT ?",
-                    (target_channel, limit),
-                )
+                query += " ORDER BY c.id"
+                
+            query += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
         return [tuple(r) for r in rows]
     except Exception as e:

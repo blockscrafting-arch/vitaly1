@@ -53,11 +53,11 @@ async def run_main_content_for_channel(channel_name: str) -> None:
 async def run_shop_content(channel_name: str) -> None:
     """Один пост с товаром/книгой из магазина в заданный канал (режим Б)."""
     cutoff_ts = int(time.time()) - _get_shop_repeat_days() * 86400
-    items = await get_shop_products_for_channel(channel_name, exclude_urls_seen_after_ts=cutoff_ts, limit=200)
+    items = await get_shop_products_for_channel(channel_name, exclude_urls_seen_after_ts=cutoff_ts, limit=1, order_by_random=True)
     if not items:
         logger.warning("[jobs] run_shop_content: нет товаров для канала %s (или все недавно публиковались), пропуск", channel_name)
         return
-    _id, url, title, excerpt, _sub = random.choice(items)
+    _id, url, title, excerpt, _sub = items[0]
     text = await generate_post(channel_name, "shop", title, excerpt or "", url)
     if not text:
         text = fallback_text(title, url, excerpt or "")
@@ -223,11 +223,11 @@ async def run_av_rotation() -> None:
     idx = int(idx) if idx is not None else 0
     idx = idx % len(AV_ROTATION_CHANNELS)
     channel_name = AV_ROTATION_CHANNELS[idx]
-    rows = await get_catalog_for_channel(ROTATION_TARGET, exclude_urls_seen_after_ts=cutoff_ts, limit=200)
+    rows = await get_catalog_for_channel(ROTATION_TARGET, exclude_urls_seen_after_ts=cutoff_ts, limit=1, order_by_random=True)
     if not rows:
         logger.warning("[jobs] run_av_rotation: нет материалов с content_type=rotation (аудио/видео), пропуск")
         return
-    _id, url, title, excerpt, _sub = random.choice(rows)
+    _id, url, title, excerpt, _sub = rows[0]
     text = await generate_post(channel_name, "rotation", title, excerpt or "", url)
     if not text:
         text = fallback_text(title, url, excerpt or "")
