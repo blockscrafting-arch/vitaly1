@@ -23,7 +23,28 @@ PROMPTS_MAIN = {
 PROMPT_SHOP = """Ты — редактор. Опиши книгу/материал из магазина: что это, кому пригодится, чем полезно. 2–4 предложения. В конце — призыв перейти в магазин (ссылку не пиши). Без восклицаний и капслока."""
 PROMPT_RADIO = """Ты — редактор. Напиши короткий атмосферный пост про радио сайта: настроение (вечер, дорога, работа, кофе, дождь — выбери одно), когда включить, зачем перейти. 2–3 предложения. Ссылку не пиши. Без восклицаний."""
 PROMPT_CROSS = """Ты — редактор. Напиши нативный анонс другого канала для подписчиков: кому зайдёт, почему стоит перейти. Без слов «подпишитесь» и без восклицаний. 2–3 предложения."""
-PROMPT_SITE = """Ты — редактор. Напиши мягкий пост про сайт napitki133.ru в целом: что там найдёшь, зачем зайти. 2–3 предложения. Ссылку не пиши. Без восклицаний."""
+# Промпты site promo по каналам (ТЗ v3.0, раздел 9.4)
+PROMPTS_SITE = {
+    CHANNEL_TRAVEL: """Ты — редактор. Напиши мягкий пост про napitki133.ru с акцентом на путеводители, маршруты, города и подборки мест.
+Упомяни конкретные разделы или типы материалов. 2-3 предложения. Ссылку не пиши. Без восклицаний.""",
+    CHANNEL_LIFHAKI: """Ты — редактор. Напиши мягкий пост про napitki133.ru с акцентом на практическую пользу, полезные инструкции и подборки решений.
+Упомяни конкретные разделы или типы материалов. 2-3 предложения. Ссылку не пиши. Без восклицаний.""",
+    CHANNEL_DRINKS: """Ты — редактор. Напиши мягкий пост про napitki133.ru с акцентом на рецепты напитков, стили, вкусы и подборки.
+Упомяни конкретные разделы или типы материалов. 2-3 предложения. Ссылку не пиши. Без восклицаний.""",
+}
+
+# Промпты AV ротации по каналам (ТЗ v3.0, раздел 8.7)
+PROMPTS_ROTATION = {
+    CHANNEL_TRAVEL: """Ты — редактор канала о путешествиях. По аудио/видео материалу напиши короткий пост (2-3 предложения).
+Структура: место, атмосфера, маршрут или впечатление, зачем послушать или посмотреть перед поездкой.
+Правила: без восклицаний, капслока и эмодзи. Только текст, без markdown.""",
+    CHANNEL_LIFHAKI: """Ты — редактор канала про лайфхаки. По аудио/видео материалу напиши короткий пост (2-3 предложения).
+Структура: польза, короткая практическая мысль, зачем посмотреть или послушать и взять себе.
+Правила: без восклицаний и капслока. Только текст.""",
+    CHANNEL_DRINKS: """Ты — редактор канала о напитках. По аудио/видео материалу напиши короткий пост (2-3 предложения).
+Структура: напиток, вкус, настроение, зачем включить или посмотреть.
+Правила: без восклицаний и капслока. Только текст.""",
+}
 
 
 def _get_system_prompt(channel: str, content_type: str) -> str:
@@ -32,15 +53,28 @@ def _get_system_prompt(channel: str, content_type: str) -> str:
         from sheets import get_prompts_from_sheet
         prompts = get_prompts_from_sheet()
         if prompts:
-            key = f"{content_type}:{channel}" if content_type == "main" else content_type
-            if key in prompts and prompts[key].strip():
-                return prompts[key].strip()
-            if content_type == "main" and f"main_{channel}" in prompts:
-                return prompts[f"main_{channel}"].strip()
+            if content_type == "main":
+                key = f"main_{channel}"
+                if key in prompts and prompts[key].strip():
+                    return prompts[key].strip()
+            elif content_type == "rotation":
+                key = f"rotation_{channel}"
+                if key in prompts and prompts[key].strip():
+                    return prompts[key].strip()
+            elif content_type == "site":
+                key = f"site_{channel}"
+                if key in prompts and prompts[key].strip():
+                    return prompts[key].strip()
+            else:
+                key = content_type
+                if key in prompts and prompts[key].strip():
+                    return prompts[key].strip()
     except Exception:
         pass
     if content_type == "main":
         return PROMPTS_MAIN.get(channel, PROMPTS_MAIN[CHANNEL_DRINKS])
+    if content_type == "rotation":
+        return PROMPTS_ROTATION.get(channel, PROMPTS_ROTATION[CHANNEL_DRINKS])
     if content_type == "shop":
         return PROMPT_SHOP
     if content_type == "radio":
@@ -48,7 +82,7 @@ def _get_system_prompt(channel: str, content_type: str) -> str:
     if content_type == "cross":
         return PROMPT_CROSS
     if content_type == "site":
-        return PROMPT_SITE
+        return PROMPTS_SITE.get(channel, PROMPTS_SITE[CHANNEL_DRINKS])
     return PROMPTS_MAIN.get(channel, PROMPTS_MAIN[CHANNEL_DRINKS])
 
 

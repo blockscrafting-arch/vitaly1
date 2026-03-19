@@ -228,7 +228,7 @@ async def run_av_rotation() -> None:
         logger.warning("[jobs] run_av_rotation: нет материалов с content_type=rotation (аудио/видео), пропуск")
         return
     _id, url, title, excerpt, _sub = random.choice(rows)
-    text = await generate_post(channel_name, "main", title, excerpt or "", url)
+    text = await generate_post(channel_name, "rotation", title, excerpt or "", url)
     if not text:
         text = fallback_text(title, url, excerpt or "")
     tg_ok, max_ok = await publish_to_both_platforms(channel_name, text, url)
