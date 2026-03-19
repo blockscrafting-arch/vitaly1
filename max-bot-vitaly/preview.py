@@ -63,7 +63,7 @@ async def demo_generation():
     rows = await get_catalog_for_channel(ROTATION_TARGET, limit=50)
     if rows:
         _id, url, title, excerpt, _sub = random.choice(rows)
-        text = await generate_post(CHANNEL_TRAVEL, "main", title, excerpt or "", url)
+        text = await generate_post(CHANNEL_TRAVEL, "rotation", title, excerpt or "", url)
         print(f"Ссылка: {url}")
         print(f"Текст:\n{text}\n")
     else:

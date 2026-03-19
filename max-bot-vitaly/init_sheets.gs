@@ -1,4 +1,4 @@
-// Скрипт для Google Таблиц для создания структуры бота napitki133.ru (ТЗ v2.0)
+// Скрипт для Google Таблиц для создания структуры бота napitki133.ru (ТЗ v3.0)
 // Инструкция:
 // 1. Откройте Google Таблицы: https://docs.google.com/spreadsheets/
 // 2. Создайте новую пустую таблицу.
@@ -105,7 +105,6 @@ function initBotSheets() {
     ["shop_repeat_days", "21"],
     ["ad_min_interval_days", "6"],
     ["selection_mode", "hybrid"],
-    ["text_repeat_limit", "50"],
     ["subcategory_gap", "true"]
   ]);
 

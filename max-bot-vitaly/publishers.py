@@ -110,6 +110,8 @@ async def publish_max(channel_name: str, body: str, url: str = "") -> bool:
         logger.warning("[publishers] Не задан или неверный ID канала MAX для %s (ожидается число или URL вида .../id123_biz)", channel_name)
         return False
     text = _make_post_text(body, url)
+    if len(text) > 4096:
+        text = text[:4090] + "\n\n…"
     bot = Bot(token=token)
     try:
         ok = await _retry_send(lambda: bot.send_message(chat_id=chat_id, text=text))
