@@ -126,13 +126,18 @@ def build_scheduler() -> AsyncIOScheduler:
             job_id = f"av_rotation_{day}_{time_str}"
         else:
             job_id = f"{slot_type}_{channel}_{day}_{time_str}"
-        scheduler.add_job(
-            func,
-            CronTrigger(day_of_week=day, hour=h, minute=m, timezone="Europe/Moscow"),
-            args=args,
-            id=job_id,
-            misfire_grace_time=MISFIRE_GRACE_TIME,
-        )
+        
+        try:
+            trigger = CronTrigger(day_of_week=day, hour=h, minute=m, timezone="Europe/Moscow")
+            scheduler.add_job(
+                func,
+                trigger,
+                args=args,
+                id=job_id,
+                misfire_grace_time=MISFIRE_GRACE_TIME,
+            )
+        except Exception as e:
+            logger.warning("[scheduler] Ошибка при добавлении задачи (возможно неверный день '%s'): %s", day, e)
 
     content_count = sum(1 for _, _, _, st in all_slots if st not in ("av", "rotation"))
     av_count = sum(1 for _, _, _, st in all_slots if st in ("av", "rotation"))
