@@ -22,7 +22,7 @@ CHANNEL_TO_WOO_CATEGORY_HINTS: dict[str, list[str]] = {
     CHANNEL_LIFHAKI: ["recepty-blyud", "рецепт.*блюд", "blyud", "блюд"],
 }
 PER_PAGE = 20
-BAD_REQUEST_CODES = (400, 404)
+BAD_REQUEST_CODES = (400, 404, 500, 502, 503, 504)
 
 
 async def fetch_product_categories() -> list[dict[str, Any]]:

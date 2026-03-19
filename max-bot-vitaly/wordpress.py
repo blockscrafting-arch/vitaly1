@@ -9,7 +9,7 @@ import httpx
 from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
 
 # Часть сайтов отдают 400 на page>1 при лимитах пагинации — не падаем, возвращаем что есть
-BAD_REQUEST_CODES = (400, 404)
+BAD_REQUEST_CODES = (400, 404, 500, 502, 503, 504)
 from db import CONTENT_ROTATION, upsert_catalog_item
 
 logger = logging.getLogger(__name__)
