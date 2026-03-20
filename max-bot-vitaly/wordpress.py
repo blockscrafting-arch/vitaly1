@@ -10,7 +10,7 @@ from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
 
 # Часть сайтов отдают 400 на page>1 при лимитах пагинации — не падаем, возвращаем что есть
 BAD_REQUEST_CODES = (400, 404, 500, 502, 503, 504)
-from db import CONTENT_ROTATION, upsert_catalog_item
+from db import CONTENT_ROTATION, purge_main_catalog_woocommerce_urls, upsert_catalog_item
 
 logger = logging.getLogger(__name__)
 PER_PAGE = 100
@@ -20,6 +20,27 @@ ROTATION_CATEGORY_HINTS = (
     "аудио", "audio", "подкаст", "podcast", "видео", "video", "reels", "рилз",
 )
 ROTATION_TARGET = "rotation"
+
+# Рубрики с такими подстроками не считаем «только AV-ротация» (ложные срабатывания: видео-рецепты и т.п.)
+ROTATION_EXCLUDE_HINTS = (
+    "рецепт", "настой", "биттер", "коктейл", "спирт", "напитк", "алког", "виски", "водк", "вино", "пиво", "джин",
+    "bar", "барн", "дистилл", "настоек", "наливк", "крепк", "ликёр", "liker",
+)
+
+
+def _is_woocommerce_product_url(url: str) -> bool:
+    u = (url or "").lower()
+    return "/product/" in u
+
+
+def _rotation_categories_blocked(slugs: list[str], names: list[str]) -> bool:
+    """Исключает пост из чистой AV-ротации, если рубрики явно про напитки/рецепты."""
+    blob = " ".join((s or "").lower() for s in (slugs or []))
+    blob += " " + " ".join((n or "").lower() for n in (names or []))
+    for hint in ROTATION_EXCLUDE_HINTS:
+        if hint in blob:
+            return True
+    return False
 
 
 async def fetch_categories() -> list[dict[str, Any]]:
@@ -114,6 +135,7 @@ async def index_site_to_catalog(
     category_id_to_slugs: dict[int, list[str]] | None = None,
     slug_to_channel: dict[str, str] | None = None,
 ) -> int:
+    await purge_main_catalog_woocommerce_urls()
     categories = await fetch_categories()
     id_to_slug: dict[int, str] = {}
     id_to_name: dict[int, str] = {}
@@ -133,11 +155,14 @@ async def index_site_to_catalog(
             url = post.get("url", "").strip()
             if not url or url in seen_urls:
                 continue
+            if _is_woocommerce_product_url(url):
+                logger.debug("[wordpress] пропуск URL товара WooCommerce в индексе постов: %s", url[:80])
+                continue
             seen_urls.add(url)
             cat_ids = post.get("category_ids", [])
             slugs = [id_to_slug.get(i, "") for i in cat_ids]
             names = [id_to_name.get(i, "") for i in cat_ids]
-            if _is_rotation_category(slugs, names):
+            if _is_rotation_category(slugs, names) and not _rotation_categories_blocked(slugs, names):
                 subcategory = slugs[0] if slugs else ""
                 await upsert_catalog_item(
                     url=url,

@@ -18,6 +18,24 @@ CONTENT_SITE = "site"
 CONTENT_ROTATION = "rotation"
 
 
+async def purge_main_catalog_woocommerce_urls() -> int:
+    """Удаляет записи main с URL товаров WooCommerce (/product/). Возвращает число удалённых строк."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute(
+                "DELETE FROM catalog WHERE content_type = ? AND INSTR(LOWER(url), '/product/') > 0",
+                (CONTENT_MAIN,),
+            )
+            await db.commit()
+            n = cursor.rowcount
+        if n and n > 0:
+            logger.info("[db] purge_main_catalog_woocommerce_urls: удалено %s строк", n)
+        return int(n) if n is not None and n >= 0 else 0
+    except Exception as e:
+        logger.warning("[db] purge_main_catalog_woocommerce_urls: %s", e)
+        return 0
+
+
 async def init_db() -> None:
     """Создаёт таблицы при первом запуске."""
     logger.info("[db] init_db: путь=%s", DB_PATH)
