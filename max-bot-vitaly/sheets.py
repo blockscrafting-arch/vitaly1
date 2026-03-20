@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
+from logging_msk import MSK
 
 logger = logging.getLogger(__name__)
 CACHE_TTL_SEC = 600  # 10 минут
@@ -104,7 +105,7 @@ def append_history_row(url: str, platform: str, channel: str, text_preview: str)
         sh = gc.open_by_key(settings.google_sheet_id)
         ws = sh.worksheet("История")
         row = [
-            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            datetime.now(MSK).strftime("%Y-%m-%d %H:%M"),
             url[:200],
             platform,
             channel,

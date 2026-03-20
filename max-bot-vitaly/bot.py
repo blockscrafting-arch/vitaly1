@@ -5,9 +5,10 @@ import signal
 
 from config import get_settings
 from db import init_db
+from logging_msk import configure_root_logging
 from scheduler import build_scheduler
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+configure_root_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 

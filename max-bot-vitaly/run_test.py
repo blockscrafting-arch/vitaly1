@@ -18,6 +18,7 @@ import sys
 
 from config import CHANNEL_DRINKS, CHANNEL_LIFHAKI, CHANNEL_TRAVEL, get_settings
 from db import init_db
+from logging_msk import configure_root_logging
 from jobs import (
     run_index_site,
     run_main_content_for_channel,
@@ -28,7 +29,7 @@ from jobs import (
     run_av_rotation,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+configure_root_logging(logging.INFO)
 CHANNELS = {"travel": CHANNEL_TRAVEL, "lifhaki": CHANNEL_LIFHAKI, "drinks": CHANNEL_DRINKS}
 
 
