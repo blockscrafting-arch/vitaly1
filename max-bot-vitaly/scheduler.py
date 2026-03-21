@@ -62,10 +62,10 @@ def _collect_slots_from_sheet() -> list[tuple[str, str, str, str]]:
         if not sheet_schedule:
             return result
         for s in sheet_schedule:
-            day = (s.get("day") or "*").strip().lower()
-            t_str = (s.get("time") or "").strip()
-            ch = s.get("channel") or ""
-            stype = (s.get("slot_type") or "main").strip().lower()
+            day = str(s.get("day") or "*").strip().lower()
+            t_str = str(s.get("time") or "").strip()
+            ch = str(s.get("channel") or "")
+            stype = str(s.get("slot_type") or "main").strip().lower()
             if not t_str:
                 continue
             # Все слоты должны иметь конкретный день (ТЗ v3.0)
