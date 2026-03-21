@@ -7,7 +7,9 @@ from config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# MAX API принимает chat_id только как integer; из URL вида https://max.ru/id672300068580_biz извлекаем число
+# MAX Bot API: POST /messages с query chat_id (integer) — dev.max.ru/docs-api/methods/POST/messages
+# Публичный URL канала https://max.ru/id{N}_biz задаёт то же N, что ожидает API, если бот — участник чата.
+# При chat.not.found сверьте ID: python list_max_chats.py
 _MAX_CHANNEL_ID_RE = re.compile(r"id(\d+)", re.I)
 
 
