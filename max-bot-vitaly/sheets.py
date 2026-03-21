@@ -80,8 +80,8 @@ def get_mapping_from_sheet() -> dict[str, str] | None:
         rows = ws.get_all_records()
         mapping: dict[str, str] = {}
         for r in rows:
-            cat = (r.get("Категория") or r.get("категория") or r.get("slug") or "").strip()
-            ch = (r.get("Канал") or r.get("канал") or "").strip().lower()
+            cat = str(r.get("Категория") or r.get("категория") or r.get("slug") or "").strip()
+            ch = str(r.get("Канал") or r.get("канал") or "").strip().lower()
             if not cat:
                 continue
             channel_key = SHEET_CHANNEL_TO_KEY.get(ch) or (ch if ch in (CHANNEL_TRAVEL, CHANNEL_LIFHAKI, CHANNEL_DRINKS) else None)
@@ -145,10 +145,10 @@ def get_schedule_from_sheet() -> list[dict[str, Any]] | None:
         rows = ws.get_all_records()
         result: list[dict[str, Any]] = []
         for r in rows:
-            ch = (r.get("Канал") or r.get("канал") or "").strip().lower()
-            slot_type = (r.get("Тип") or r.get("тип") or "main").strip().lower()
-            day = (r.get("День") or r.get("день") or "*").strip().lower()
-            t = (r.get("Время") or r.get("время") or "").strip()
+            ch = str(r.get("Канал") or r.get("канал") or "").strip().lower()
+            slot_type = str(r.get("Тип") or r.get("тип") or "main").strip().lower()
+            day = str(r.get("День") or r.get("день") or "*").strip().lower()
+            t = str(r.get("Время") or r.get("время") or "").strip()
             if ch and t:
                 channel_key = SHEET_CHANNEL_TO_KEY.get(ch) or (ch if ch in (CHANNEL_TRAVEL, CHANNEL_LIFHAKI, CHANNEL_DRINKS) else ch)
                 result.append({"channel": channel_key, "slot_type": slot_type, "day": day, "time": t})
@@ -173,8 +173,8 @@ def get_prompts_from_sheet() -> dict[str, str] | None:
         rows = ws.get_all_records()
         result: dict[str, str] = {}
         for r in rows:
-            key = (r.get("Ключ") or r.get("ключ") or r.get("Тип") or r.get("тип") or "").strip().lower()
-            text = (r.get("Текст") or r.get("текст") or "").strip()
+            key = str(r.get("Ключ") or r.get("ключ") or r.get("Тип") or r.get("тип") or "").strip().lower()
+            text = str(r.get("Текст") or r.get("текст") or "").strip()
             if key and text:
                 result[key] = text
         _prompts_cache = result if result else {}
