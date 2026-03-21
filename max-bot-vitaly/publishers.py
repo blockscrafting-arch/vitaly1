@@ -17,8 +17,12 @@ def _normalize_max_chat_id(value: str) -> int | None:
     value = (value or "").strip()
     if not value:
         return None
-    if value.isdigit():
+    # Поддерживаем отрицательные числа (реальные chat_id каналов MAX)
+    try:
         return int(value)
+    except ValueError:
+        pass
+    # Если передан URL вида https://max.ru/id{N}_biz — берём число из него
     match = _MAX_CHANNEL_ID_RE.search(value)
     if match:
         return int(match.group(1))
