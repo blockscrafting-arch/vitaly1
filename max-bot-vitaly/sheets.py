@@ -198,8 +198,8 @@ def get_settings_from_sheet() -> dict[str, str] | None:
         rows = ws.get_all_records()
         result: dict[str, str] = {}
         for r in rows:
-            k = (r.get("Ключ") or r.get("ключ") or "").strip()
-            v = (r.get("Значение") or r.get("значение") or "").strip()
+            k = str(r.get("Ключ") or r.get("ключ") or "").strip()
+            v = str(r.get("Значение") or r.get("значение") or "").strip()
             if k:
                 result[k] = v
         _settings_cache = result if result else {}
