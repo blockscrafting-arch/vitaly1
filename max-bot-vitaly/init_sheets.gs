@@ -69,9 +69,7 @@ function initBotSheets() {
     ["drinks", "main", "thu", "15:45"],
     ["drinks", "shop", "fri", "12:45"],
     ["drinks", "main", "sat", "16:15"],
-    ["drinks", "radio", "sun", "20:30"],
-    
-    ["*", "rotation", "sat", "15:00"]
+    ["drinks", "radio", "sun", "20:30"]
   ]);
 
   // 4. Лист "Промпты"

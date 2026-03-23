@@ -36,8 +36,6 @@ SCHEDULE_FALLBACK = [
     ("fri", "12:45", CHANNEL_DRINKS, "shop"),
     ("sat", "16:15", CHANNEL_DRINKS, "main"),
     ("sun", "20:30", CHANNEL_DRINKS, "radio"),
-    # AV ротация: суббота 15:00, канал по кругу
-    ("sat", "15:00", "*", "rotation"),
 ]
 
 
