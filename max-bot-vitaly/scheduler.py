@@ -107,41 +107,62 @@ def build_scheduler() -> AsyncIOScheduler:
         "rotation": run_av_rotation,
     }
 
-    all_slots = _collect_slots_from_sheet()
-    if not all_slots:
-        all_slots = SCHEDULE_FALLBACK
-
-    for day, time_str, channel, slot_type in all_slots:
-        func = JOB_FUNC.get(slot_type)
-        if not func:
-            continue
-        parsed = _parse_time(time_str)
-        if not parsed:
-            continue
-        h, m = parsed
-        args = [channel] if slot_type not in ("av", "rotation") else []
-        if slot_type in ("av", "rotation"):
-            job_id = f"av_rotation_{day}_{time_str}"
-        else:
-            job_id = f"{slot_type}_{channel}_{day}_{time_str}"
+    def _apply_schedule() -> None:
+        all_slots = _collect_slots_from_sheet()
+        if not all_slots:
+            all_slots = SCHEDULE_FALLBACK
+            logger.warning("[scheduler] Не удалось получить слоты из таблицы, используется fallback")
         
-        try:
-            trigger = CronTrigger(day_of_week=day, hour=h, minute=m, timezone="Europe/Moscow")
-            scheduler.add_job(
-                func,
-                trigger,
-                args=args,
-                id=job_id,
-                misfire_grace_time=MISFIRE_GRACE_TIME,
-            )
-        except Exception as e:
-            logger.warning("[scheduler] Ошибка при добавлении задачи (возможно неверный день '%s'): %s", day, e)
+        # Удаляем все старые работы, кроме индексации (у которой id="index_site") и обновления расписания (у которой id="reload_schedule")
+        for job in scheduler.get_jobs():
+            if job.id not in ("index_site", "reload_schedule"):
+                scheduler.remove_job(job.id)
+                
+        for day, time_str, channel, slot_type in all_slots:
+            func = JOB_FUNC.get(slot_type)
+            if not func:
+                continue
+            parsed = _parse_time(time_str)
+            if not parsed:
+                continue
+            h, m = parsed
+            args = [channel] if slot_type not in ("av", "rotation") else []
+            if slot_type in ("av", "rotation"):
+                job_id = f"av_rotation_{day}_{time_str}_{hash(time_str)}"
+            else:
+                job_id = f"{slot_type}_{channel}_{day}_{time_str}_{hash(time_str)}"
+            
+            try:
+                trigger = CronTrigger(day_of_week=day, hour=h, minute=m, timezone="Europe/Moscow")
+                scheduler.add_job(
+                    func,
+                    trigger,
+                    args=args,
+                    id=job_id,
+                    misfire_grace_time=MISFIRE_GRACE_TIME,
+                    replace_existing=True
+                )
+            except Exception as e:
+                logger.warning("[scheduler] Ошибка при добавлении задачи (возможно неверный день '%s'): %s", day, e)
 
-    content_count = sum(1 for _, _, _, st in all_slots if st not in ("av", "rotation"))
-    av_count = sum(1 for _, _, _, st in all_slots if st in ("av", "rotation"))
-    logger.info(
-        "[scheduler] Добавлено: индексация + %s контентных слотов + %s av_rotation",
-        content_count,
-        av_count,
+        content_count = sum(1 for _, _, _, st in all_slots if st not in ("av", "rotation"))
+        av_count = sum(1 for _, _, _, st in all_slots if st in ("av", "rotation"))
+        logger.info(
+            "[scheduler] Обновлено расписание: индексация + %s контентных слотов + %s av_rotation",
+            content_count,
+            av_count,
+        )
+
+    # Первичное применение расписания
+    _apply_schedule()
+
+    # Фоновое обновление каждые 30 минут
+    scheduler.add_job(
+        _apply_schedule,
+        "interval",
+        minutes=30,
+        id="reload_schedule",
+        misfire_grace_time=MISFIRE_GRACE_TIME,
     )
+
     return scheduler
