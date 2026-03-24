@@ -1,5 +1,6 @@
 # Markdown, документы и Cursor
 *.md
+!max-bot-vitaly/ИНСТРУКЦИЯ_ДЛЯ_ЗАКАЗЧИКА.md
 *.docx
 *.pdf
 .cursor/
